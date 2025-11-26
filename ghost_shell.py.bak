@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""
+Ghost Shell - educational mini shell
+Features:
+- prompt Ghost$
+- built-ins: cd, pwd, echo, exit, history
+- runs external commands via subprocess
+- prints a short explanation after each command
+- keeps in-session history
+"""
+
+import os
+import shlex
+import subprocess
+import sys
+
+PROMPT = "Ghost$ "
+
+def explain(cmd_name, kind, extra=""):
+    """Return a short human-friendly explanation string."""
+    if kind == 'builtin':
+        return f"(👻) Built-in: shell handled `{cmd_name}` without creating a child process."
+    if kind == 'external':
+        return f"(👻) External: shell created a child process and used exec to run `{cmd_name}`."
+    if kind == 'error':
+        return f"(👻) Error: {extra}"
+    return "(👻) Done."
+
+def run_external(parts):
+    """Run an external command and print output (stdout/stderr)."""
+    try:
+        result = subprocess.run(parts, check=False, text=True, capture_output=True)
+        if result.stdout:
+            print(result.stdout, end="")
+        if result.stderr:
+            print(result.stderr, end="", file=sys.stderr)
+        print(explain(parts[0], 'external'))
+    except FileNotFoundError:
+        print(f"Ghost: command not found: {parts[0]}")
+        print(explain(parts[0], 'error', "executable not found"))
+
+def handle_builtin(parts, history):
+    cmd = parts[0]
+    if cmd == "exit":
+        print("Goodbye 👻")
+        sys.exit(0)
+    if cmd == "pwd":
+        cwd = os.getcwd()
+        print(cwd)
+        print(explain('pwd', 'builtin'))
+        return True
+    if cmd == "cd":
+        target = parts[1] if len(parts) > 1 else os.path.expanduser("~")
+        try:
+            os.chdir(os.path.expanduser(target))
+            print(explain('cd', 'builtin', f"changed directory to {os.getcwd()}"))
+        except Exception as e:
+            print(f"cd: {e}")
+            print(explain('cd', 'error', str(e)))
+        return True
+    if cmd == "echo":
+        to_echo = " ".join(parts[1:]) if len(parts) > 1 else ""
+        print(to_echo)
+        print(explain('echo', 'builtin'))
+        return True
+    if cmd == "history":
+        for i, h in enumerate(history, start=1):
+            print(f"{i}\t{h}")
+        print(explain('history', 'builtin'))
+        return True
+    return False
+
+def parse_input(line):
+    try:
+        parts = shlex.split(line)
+        return parts
+    except ValueError as e:
+        print(f"Parse error: {e}")
+        return []
+
+def main():
+    history = []
+    while True:
+        try:
+            line = input(PROMPT)
+        except EOFError:
+            print()
+            break
+        if not line.strip():
+            continue
+        history.append(line)
+        parts = parse_input(line)
+        if not parts:
+            continue
+        built = handle_builtin(parts, history)
+        if built is False:
+            run_external(parts)
+
+if __name__ == "__main__":
+    main()
